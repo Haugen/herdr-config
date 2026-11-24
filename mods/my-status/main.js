@@ -65,15 +65,15 @@ export default class MyStatus extends View {
     const busy = this.busy[space.id];
     const up = dev && this.listening[dev.url];
     const icon = (name, id, tip, onClick) =>
-      h_flex().id(id).size(18).flex_none().mt(1).items_center().justify_center().rounded(4).cursor_pointer()
+      h_flex().id(id).size(18).flex_none().mt(3).items_center().justify_center().rounded(4).cursor_pointer()
         .hover((s) => s.bg(t.hover)).tooltip(tip)
         .on_click((_e, cx) => onClick(cx)).child(svg(`mods/my-status/${name}.svg`).size(11));
 
     const row = h_flex().h_full().gap(6).items_center();
-    // Glyphs sit ~1px below the line box's centre; nudge the non-text items to match.
-    const dot = (bg) => div().size(7).flex_none().mt(1).rounded(4).bg(bg);
+    // Glyphs sit below the line box centre; a centred item moves by half its margin, so mt(3) = 1.5px.
+    const dot = (bg) => div().size(7).flex_none().mt(3).rounded(4).bg(bg);
     if (busy || (dev && !up)) {
-      return row.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().mt(1).spin(900))
+      return row.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().mt(3).spin(900))
         .child(div().text_color(t.muted).child(busy === "stop" ? "stopping…" : `starting ${dev?.url.replace("https://", "") ?? ""}`))
         .when(Boolean(dev) && busy !== "stop", (el) => el.child(icon("stop", "dev-stop", "Stop dev server", (cx) => this.local(space, "stop", cx))));
     }
