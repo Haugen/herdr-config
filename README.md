@@ -4,7 +4,8 @@ My Herdr desktop app config. This repo *is* `~/.config/herdr-app`; `.gitignore` 
 leaves everything Herdr writes or regenerates untracked.
 
 - `settings.json`, `keys.json` — look and keybindings.
-- `layouts/my-main.json` — clone of Herdr's `main`, with `my-status` as the status bar.
+- `layouts/my-main.json` — clone of Herdr's `main`, with `my-spaces` as the sidebar list and `my-status` as the status bar.
+- `mods/my-spaces/` — clone of `spaces`: name and branch on two lines, so neither truncates the other.
 - `mods/my-status/` — clone of `workspace-status` plus the local dev server: open, start, stop.
   It calls `~/.claude/skills/local/local.sh` (a personal Claude Code skill, not in this repo).
 
