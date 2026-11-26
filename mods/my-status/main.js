@@ -2,28 +2,34 @@ import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, agents, terminals, theme, run, window, keys, exec, home, notify } from "herdr";
 
-// The dev server is ~/.claude/skills/local/local.sh; this only shows it and calls start/stop.
-const LOCAL = () => `${home()}/.claude/skills/local/local.sh`;
-const WEB = "apps/ratsit-web/Ratsit.Web";
+// The dev server is `ws local` (~/projects/dotfiles/bin/ws); this only shows it and calls start/stop.
+// A space gets the controls when its repo's ws recipe has [dev.*] processes.
+const WS = () => `${home()}/.local/bin/ws`;
 
 export default class MyStatus extends View {
   init(_props, cx) {
-    this.hasWeb = {};     // folder -> bool
+    this.recipe = {};     // folder -> { root } when its repo's recipe has dev processes, else null
     this.listening = {};  // url -> bool
     this.busy = {};       // space id -> "start" | "stop"
     cx.timer.every(2000, (cx) => this.poll(cx));
     this.poll(cx);
   }
 
-  // Data herdr does not push: whether a space's folder has ratsit-web, and whether the port answers.
+  // Data herdr does not push: whether a space's repo has dev processes, and whether the port answers.
   poll(cx) {
     const space = spaces().find((s) => s.active);
     if (!space) return;
     const dev = this.dev(space);
     cx.spawn(async (cx) => {
-      if (space.folder && this.hasWeb[space.folder] === undefined) {
-        const r = await exec("test", ["-d", `${space.folder}/${WEB}`]);
-        this.hasWeb[space.folder] = r.code === 0;
+      if (space.folder && !space.machine && this.recipe[space.folder] === undefined) {
+        this.recipe[space.folder] = null;
+        const r = await exec(WS(), ["info"], { cwd: space.folder }).catch(() => ({ code: -1 }));
+        // No recipe or not a checkout: ws exits non-zero. Anything else (e.g. too old a python) is worth a word.
+        if (r.code !== 0 && r.stderr && !/no recipe|not inside a git checkout|has no origin remote/.test(r.stderr))
+          notify({ title: "ws info failed", body: r.stderr.trim(), level: "error" });
+        const info = Object.fromEntries((r.code === 0 ? r.stdout : "").split("\n").filter((l) => l.includes("="))
+          .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+        this.recipe[space.folder] = info.dev ? { root: info.root } : null;
       }
       if (dev) {
         const port = dev.url.split(":").pop();
@@ -34,16 +40,18 @@ export default class MyStatus extends View {
     });
   }
 
+  // ws labels every dev terminal with its checkout (dev.worktree) and the url the first process listens on.
   dev(space) {
-    const web = terminals().find((t) => t.state === "live" && t.labels?.["herdr.space"] === space.id && t.labels?.["dev.role"] === "web");
-    return web ? { url: web.labels["dev.url"], app: web.labels["dev.app"] } : null;
+    const root = this.recipe[space.folder]?.root;
+    const t = root && terminals().find((t) => t.state === "live" && t.labels?.["dev.worktree"] === root && t.labels?.["dev.url"]);
+    return t ? { url: t.labels["dev.url"], app: t.labels["dev.app"] } : null;
   }
 
   local(space, action, cx) {
     this.busy[space.id] = action;
     cx.notify();
     cx.spawn(async (cx) => {
-      const r = await exec(LOCAL(), action === "start" ? ["start", "--space", space.id] : ["stop"], { cwd: space.folder, timeout: 60000 });
+      const r = await exec(WS(), ["local", action], { cwd: space.folder, timeout: 60000 }).catch((e) => ({ code: -1, stderr: String(e) }));
       if (r.code !== 0) notify({ title: `Dev server ${action} failed`, body: (r.stderr || r.stdout).trim(), level: "error" });
       delete this.busy[space.id];
       cx.notify();
@@ -60,7 +68,7 @@ export default class MyStatus extends View {
   }
 
   devStatus(space, t) {
-    if (!space?.folder || !this.hasWeb[space.folder]) return null;
+    if (!space?.folder || !this.recipe[space.folder]) return null;
     const dev = this.dev(space);
     const busy = this.busy[space.id];
     const up = dev && this.listening[dev.url];
@@ -73,13 +81,13 @@ export default class MyStatus extends View {
     const dot = (bg) => div().size(6).flex_none().rounded(3).bg(bg);  // even size, like the agents dot: centres on the pixel grid
     if (busy || (dev && !up)) {
       return row.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().spin(900))
-        .child(div().text_color(t.muted).child(busy === "stop" ? "stopping…" : `starting ${dev?.url.replace("https://", "") ?? ""}`))
+        .child(div().text_color(t.muted).child(busy === "stop" ? "stopping…" : `starting ${dev?.url.replace(/^https?:\/\//, "") ?? ""}`))
         .when(Boolean(dev) && busy !== "stop", (el) => el.child(icon("stop", "dev-stop", "Stop dev server", (cx) => this.local(space, "stop", cx))));
     }
     if (dev) {
       return row.child(dot(t.done))
         .child(div().id("dev-url").cursor_pointer().text_color(t.foreground).hover((s) => s.underline())
-          .tooltip("Open in browser").on_click(() => exec("open", [dev.url])).child(dev.url.replace("https://", "")))
+          .tooltip("Open in browser").on_click(() => exec("open", [dev.url])).child(dev.url.replace(/^https?:\/\//, "")))
         .child(icon("stop", "dev-stop", "Stop dev server", (cx) => this.local(space, "stop", cx)));
     }
     return row.child(dot(t.dim))
