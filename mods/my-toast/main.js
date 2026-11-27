@@ -1,5 +1,5 @@
-// Herdr's toast, minus its "<agent> finished" note: Settings has no switch for it. The layout's
-// "toast" points here; "needs you" and every notify() still show.
+// Herdr's toast, minus its agent notes ("finished", "needs you"): Settings has no switch for them.
+// The layout's "toast" points here; every notify() from a mod still shows.
 
 import { View, div, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
@@ -7,12 +7,13 @@ import { props, closeOverlay, run, theme } from "herdr";
 
 const DOT = { error: "blocked", warning: "working", success: "done", info: "accent" };
 
-const agentFinished = (p) => p.action?.name === "agent.focus" && / finished$/.test(p.title ?? "");
+// Herdr's agent notes are the toasts that click through to an agent.
+const agentNote = (p) => p.action?.name === "agent.focus";
 
 export default class Toast extends View {
   init() {
     const p = props() ?? {};
-    if (agentFinished(p)) closeOverlay(p.overlay);
+    if (agentNote(p)) closeOverlay(p.overlay);
   }
 
   render(cx) {
